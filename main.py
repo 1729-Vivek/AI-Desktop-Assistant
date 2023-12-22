@@ -2,11 +2,122 @@ import speech_recognition as sr
 import os
 import webbrowser
 import subprocess
+import re
+import openai
+from config import apikey
 import datetime
 import psutil
+import random
+import pyowm
+from newsapi import NewsApiClient
+# Initialize News API Client
+newsapi = NewsApiClient(api_key='98e9089378384856834740a199781a7c')
+
+# Initialize OpenWeatherMap Client
+owm = pyowm.OWM('268ac7a59030442dbaa05331232507')
+
+def get_weather(city):
+    try:
+        # Search for the city in OpenWeatherMap
+        observation = owm.weather_at_place(city)
+        w = observation.get_weather()
+
+        # Get weather details
+        weather_status = w.get_status()
+        temperature = w.get_temperature('celsius')['temp']
+        humidity = w.get_humidity()
+
+        say(f"The weather in {city} is {weather_status}.")
+        say(f"The temperature is {temperature:.1f} degrees Celsius.")
+        say(f"The humidity is {humidity}%.")
+    except pyowm.exceptions.api_response_error.NotFoundError:
+        say(f"Sorry, I couldn't find weather information for {city}.")
+    except pyowm.exceptions.api_call_error.APICallError:
+        say("Sorry, there was an error while fetching the weather information.")
+
+# Example usage
+
+def play_youtube_song(song_name):
+    # Use regular expressions to remove any unwanted words like "play", "song", etc. from the user's query
+    song_name = re.sub(r'play|song', '', song_name, flags=re.IGNORECASE).strip()
+
+    # Construct the YouTube URL for the song search
+    youtube_url = f"https://www.youtube.com/results?search_query={song_name}"
+
+    # Open the URL in the default web browser
+    webbrowser.open(youtube_url)
+    say(f"Playing {song_name} on YouTube.")
+
+def get_top_headlines():
+    # Get top headlines from News API
+    top_headlines = newsapi.get_top_headlines(language='en', country='us', page_size=5)
+
+    # Extract and read the news titles
+    if top_headlines['status'] == 'ok':
+        articles = top_headlines['articles']
+        for index, article in enumerate(articles):
+            title = article['title']
+            say(f"News {index + 1}: {title}")
+    else:
+        say("Sorry, I couldn't fetch the latest news at the moment.")
+
+
+
+
+chatStr= ""
+def chat(query):
+    global chatStr
+    print(chatStr)
+    openai.api_key=apikey
+    chatStr+=f"Vivek: {query}\n Jarvis:"
+    response = openai.Completion.create(
+        model="text-davinci-003",
+        prompt=chatStr,
+        temperature=1,
+        max_tokens=256,
+        top_p=1,
+        frequency_penalty=0,
+        presence_penalty=0
+    )
+    say(response["choices"][0]["text"])
+    chatStr+=f"{response['choices'][0]['text']}\n"
+    return response["choices"][0]["text"]
+
+
+    
+def ai(prompt):
+    openai.api_key = apikey
+    text= f"OpenAi response for prompt: {prompt} \n ***************************\n\n"
+
+    response = openai.Completion.create(
+        model="text-davinci-003",
+        prompt=prompt,
+        temperature=1,
+        max_tokens=256,
+        top_p=1,
+        frequency_penalty=0,
+        presence_penalty=0
+    )
+    try:
+        print(response["choices"][0]["text"])
+        text+=response["choices"][0]["text"]
+        if not os.path.exists("OpenAi"):
+            os.mkdir("OpenAi")
+
+        with open(f"OpenAi/prompt -{random.randint(1,123456789)}","w") as f:
+            f.write(text)
+    except KeyError as e:
+        # This block will execute if the "choices" key or the index 0 is not found in the response dictionary.
+        print("An error occurred while accessing the 'choices' key or index 0.")
+        print(f"Error message: {e}")
+    except Exception as e:
+        # This block will catch any other unexpected exceptions that may occur during the print statement.
+        print("An unexpected error occurred.")
+        print(f"Error message: {e}")
+
+
 def say(text):
     os.system(f"espeak '{text}'")
-
 def takeCommand():
     r = sr.Recognizer()
     with sr.Microphone() as source:
@@ -99,35 +210,54 @@ if __name__ == '__main__':
                     say(f"Opening {site[0]} sir....")
                     webbrowser.open(site[1])
 
-            if "open music" in query:
+            if "open music  man meri jaan" in query:
                 musicPath = "/home/vats/Downloads/song.mp3"
                 os.system(f"open {musicPath}")
 
-            if "the time" in query:
+            elif "the time" in query:
                 strfTime = datetime.datetime.now().strftime("%H:%M:%S")
                 say(f"Sir the time is {strfTime}")
 
-            if "time is" in query:
+            elif "time is" in query:
                 hour = datetime.datetime.now().strftime("%H")
                 min = datetime.datetime.now().strftime("%M")
                 sec = datetime.datetime.now().strftime("%S")
                 say(f"Sir time is {hour} baj ke {min} minutes {sec} second huaa hai")
 
-            if "thank you" in query and "jarvis" in query:  # Check for both "thank you" and "jarvis" in the query
+            elif "thank you" in query and "jarvis" in query:  # Check for both "thank you" and "jarvis" in the query
                 say("It's my pleasure sir")
 
-            if "open camera" in query:  # Use all lowercase for easier recognition
+            elif "open camera" in query:  # Use all lowercase for easier recognition
                 subprocess.Popen(["cheese"])  # Run the camera opening process in the background
                 camera_opened=True
 
-            if "open brave browser" in query:
+            elif "open brave browser" in query:
                 subprocess.Popen(["/usr/bin/brave-browser"])
 
-            if "close camera" in query and camera_opened:  # Check for "close camera" only if camera is opened
+            elif "latest news" in query.lower():
+                get_top_headlines()
+
+            elif "close camera" in query and camera_opened:  # Check for "close camera" only if camera is opened
                 if is_camera_running():
                     os.system("killall cheese")  # Terminate the "cheese" process
                 camera_opened = False  # Set camera_opened to False
 
-            if "stop" in query or "exit" in query:
+            elif "Using artificial intelligence".lower() in query.lower():
+                ai(prompt=query)
+
+            elif "weather in" in query.lower():
+                city = query.lower().split("weather in")[1].strip()
+                get_weather(city)
+
+            elif "play a song" in query.lower():
+            # Extract the song name from the user's query and play it on YouTube
+                song_name = query.lower().replace("play a song", "").strip()
+                play_youtube_song(song_name)
+
+            elif "stop" in query or "exit" in query:
                 say("Goodbye sir. Exiting.")
                 break
+
+            else:
+                print("Chatting")
+                chat(query)

@@ -1,0 +1,30 @@
+OpenAi response for prompt: hello jarvis using artificial intelligence write a c plus program to generate prime number till 100 
+ ***************************
+
+
+
+#include <stdio.h>
+
+int main()
+{
+    int n, flag;
+ 
+    printf("Prime numbers from 1 to 100:\n");
+    for (n = 2; n <= 100; n++)
+    {
+        // check if number is prime or not
+        flag = 0;
+        for(int i = 2; i <= n/2; ++i)
+        {
+            if(n % i == 0)
+            {
+                flag = 1;
+                break;
+            }
+        }
+        // print prime number
+        if (flag == 0)
+            printf("%d\n", n);
+    }
+    return 0;
+}
